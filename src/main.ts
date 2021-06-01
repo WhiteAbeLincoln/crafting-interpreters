@@ -1,14 +1,14 @@
 import Err from './errors'
 import Logger from './logger'
-import { ConsoleErrorHandler } from './errors/console-handler'
 import { ConsoleLoggerHandler } from './logger/console-logger'
+import { LoggerErrorHandler } from './errors/console-handler'
 import { readFile } from 'fs/promises'
 import { run } from './eval'
 import repl from 'repl'
 import { useDeferred } from './util'
 
-Err.setHandler(new ConsoleErrorHandler())
 Logger.setHandler(new ConsoleLoggerHandler())
+Err.setHandler(new LoggerErrorHandler())
 
 function runFile(path: string) {
   return readFile(path, { encoding: 'utf-8' }).then(v => {
@@ -71,7 +71,7 @@ async function main(argv: string[]): Promise<number> {
 
   try {
     if (args.length > 1) {
-      console.log(`Usage: ${argv[0]} ${argv[1]} [script]`)
+      Logger.stdout(`Usage: ${argv[0]} ${argv[1]} [script]`)
       return 64
     } else if (args[0]) {
       await runFile(args[0])
@@ -79,7 +79,7 @@ async function main(argv: string[]): Promise<number> {
       await runPrompt()
     }
   } catch (e) {
-    console.error(e)
+    Logger.stderr(e)
     return 1
   }
 

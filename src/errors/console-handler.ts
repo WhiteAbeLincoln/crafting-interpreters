@@ -1,9 +1,11 @@
+import Logger from '../logger'
 import { ErrorHandler, SourceError } from './errors'
 
-export class ConsoleErrorHandler implements ErrorHandler {
+export class LoggerErrorHandler implements ErrorHandler {
   private _hadError = false
   add(err: SourceError) {
-    console.error(err.toString())
+    Logger.stderr(err.toString())
+    this._hadError = true
   }
   reset() {
     this._hadError = false
