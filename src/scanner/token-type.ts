@@ -1,4 +1,3 @@
-
 export type TokenType =
   // Single-character tokens.
   'LEFT_PAREN' | 'RIGHT_PAREN' |
@@ -27,3 +26,5 @@ export type TokenType =
   'WHILE' |
 
   'EOF'
+
+export default TokenType

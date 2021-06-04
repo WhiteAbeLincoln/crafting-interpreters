@@ -1,5 +1,6 @@
-import { DiscriminateUnion } from '../util';
-import { TokenType } from './token-type';
+import { report } from '../errors'
+import { DiscriminateUnion } from '../util'
+import { TokenType } from './token-type'
 
 export interface TokenBase<T extends TokenType> {
   readonly type: T
@@ -14,7 +15,7 @@ export interface TokenLiteral<T extends TokenType, V> extends TokenBase<T> {
 export type LiteralTokens = TokenLiteral<'STRING', string> | TokenLiteral<'NUMBER', number>
 export type LitTokenTypes = LiteralTokens['type']
 export type RegTokenTypes = Exclude<TokenType, LitTokenTypes>
-export type Token = TokenBase<RegTokenTypes> | LiteralTokens
+export type Token = { [T in RegTokenTypes]: TokenBase<T> }[RegTokenTypes] | LiteralTokens
 
 export type GetTok<T extends Token['type']> = DiscriminateUnion<Token, 'type', T>
 export type GetLit<T extends LitTokenTypes> = DiscriminateUnion<LiteralTokens, 'type', T>['literal']
@@ -49,5 +50,15 @@ export function token<T extends TokenType>(
 }
 
 export function toString(token: Token) {
-  return token.lexeme;
+  return token.lexeme
 }
+
+export function error(token: Token, message: string) {
+  if (token.type === 'EOF') {
+    report(token.line, " at end", message)
+  } else {
+    report(token.line, ` at '${token.lexeme}'`, message)
+  }
+}
+
+export default Token

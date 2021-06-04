@@ -17,8 +17,12 @@ export interface ErrorHandler {
 
 const handler = SingletonHandler.Create<ErrorHandler>('ErrorHandler')
 
+export function report(line: number, where: string, message: string) {
+  handler.add(new SourceError(line, where, message))
+}
+
 export function error(line: number, message: string) {
-  handler.add(new SourceError(line, "", message))
+  report(line, "", message)
 }
 
 export default handler
