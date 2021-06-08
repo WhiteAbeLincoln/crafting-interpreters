@@ -3,18 +3,34 @@ import Logger from './logger'
 import { ConsoleLoggerHandler } from './logger/console-logger'
 import { LoggerErrorHandler } from './errors/console-handler'
 import { readFile } from 'fs/promises'
-import { run } from './eval'
 import repl from 'repl'
 import { useDeferred } from './util'
+import { Parser } from './parser/parser'
+import { Scanner } from './scanner/scanner'
+import { interpret } from './interpreter/interpreter'
 
 Logger.setHandler(new ConsoleLoggerHandler())
 Err.setHandler(new LoggerErrorHandler())
+
+function run(source: string): void {
+  const scanner = new Scanner(source)
+  const tokens = scanner.scanTokens()
+  const parser = new Parser(tokens)
+  const expression = parser.parse()
+
+  if (Err.hadError() || !expression) return;
+
+  interpret(expression)
+}
 
 function runFile(path: string) {
   return readFile(path, { encoding: 'utf-8' }).then(v => {
     run(v)
     if (Err.hadError()) {
       process.exit(65)
+    }
+    if (Err.hadRuntimeError()) {
+      process.exit(70)
     }
   })
 }

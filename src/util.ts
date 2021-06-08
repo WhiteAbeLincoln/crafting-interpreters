@@ -80,3 +80,15 @@ export type DiscriminateUnion<
   TagKey extends keyof Union,
   TagValue extends Union[TagKey]
 > = Union extends Record<TagKey, TagValue> ? Union : never
+
+export const neg = <T>(v: T) => -v
+export const gt = <T>(a: T, b: T) => a > b
+export const ge = <T>(a: T, b: T) => a >= b
+export const lt = <T>(a: T, b: T) => a < b
+export const le = <T>(a: T, b: T) => a <= b
+export const sub = (a: number, b: number) => a - b
+export const div = (a: number, b: number) => a / b
+export const mul = (a: number, b: number) => a * b
+
+export type Refinement<A, B extends A> = (a: A) => a is B
+export type Assertion<A, B extends A> = (a: A) => asserts a is B

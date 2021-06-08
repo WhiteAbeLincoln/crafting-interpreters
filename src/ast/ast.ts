@@ -49,3 +49,7 @@ export function binary(left: Expression, op: BinOpTokens, right: Expression): Ex
 export function ast<K extends Expression['kind']>(kind: K, extra: Omit<DiscriminateUnion<Expression, 'kind', K>, 'kind'>): Expression {
   return { kind, ...extra } as DiscriminateUnion<Expression, 'kind', K>
 }
+
+export function match<T>(matcher: { [k in Expression['kind']]: (value: Omit<DiscriminateUnion<Expression, 'kind', k>, 'kind'>) => T }): (e: Expression) => T {
+  return e => matcher[e.kind](e as any)
+}

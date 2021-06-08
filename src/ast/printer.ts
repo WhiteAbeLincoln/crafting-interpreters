@@ -1,15 +1,13 @@
-import { Expression } from './ast'
+import { Expression, match } from './ast'
 
-export function print(expr: Expression): string {
-  switch (expr.kind) {
-    case 'binary': return parenthesize(expr.op.lexeme, expr.left, expr.right)
-    case 'grouping': return parenthesize("group", expr.expr)
-    case 'literal': return (expr.value === null ? "nil"
-                           : typeof expr.value === 'string' ? `"${expr.value}"`
-                           : expr.value.toString())
-    case 'unary': return parenthesize(expr.op.lexeme, expr.expr)
-  }
-}
+export const print = match({
+    'binary': ({ op, left, right }) => parenthesize(op.lexeme, left, right),
+    'grouping': ({ expr }) => parenthesize("group", expr),
+    'literal': ({ value }) => (value === null ? "nil"
+                              : typeof value === 'string' ? `"${value}"`
+                              : value.toString()),
+    'unary': ({ op, expr }) => parenthesize(op.lexeme, expr)
+})
 
 function parenthesize(name: string, ...exprs: Expression[]): string {
   return `(${name}${exprs.map(e => ` ${print(e)}`).join('')})`;
