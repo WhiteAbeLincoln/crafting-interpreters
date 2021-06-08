@@ -28,7 +28,7 @@ function checkOps<B extends ExpressionValue, Args extends ExpressionValue[]>(pre
 
 const assertNumber = (op: Token) => (a: ExpressionValue): asserts a is number => {
   if (typeof a != 'number') {
-    throw new RuntimeError(op, "Operand must be a number.")
+    throw new RuntimeError(op, 'Operand must be a number.')
   }
 }
 
@@ -60,9 +60,14 @@ export const evaluate: (e: Expression) => ExpressionValue = match<ExpressionValu
         if (typeof left === 'string' || typeof right === 'string') {
           return stringify(left) + stringify(right)
         }
-        throw new RuntimeError(expr.op, "Operands must both be numbers or one must be a string.")
+        throw new RuntimeError(expr.op, 'Operands must both be numbers or one must be a string.')
       }
-      case 'SLASH': return checkNumOps(expr.op, div)(left, right)
+      case 'SLASH': return checkNumOps(expr.op, (left: number, right: number) => {
+        if (right === 0) {
+          throw new RuntimeError(expr.op, 'Divide by zero error.')
+        }
+        return div(left, right)
+      })(left, right)
       case 'STAR': return checkNumOps(expr.op, mul)(left, right)
       case 'BANG_EQUAL': return !isEqual(left, right)
       case 'EQUAL_EQUAL': return isEqual(left, right)
