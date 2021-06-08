@@ -57,10 +57,10 @@ export const evaluate: (e: Expression) => ExpressionValue = match<ExpressionValu
         if (typeof left === 'number' && typeof right === 'number') {
           return left + right
         }
-        if (typeof left === 'string' && typeof right === 'string') {
-          return left + right
+        if (typeof left === 'string' || typeof right === 'string') {
+          return stringify(left) + stringify(right)
         }
-        throw new RuntimeError(expr.op, "Operands must both be numbers or both be strings.")
+        throw new RuntimeError(expr.op, "Operands must both be numbers or one must be a string.")
       }
       case 'SLASH': return checkNumOps(expr.op, div)(left, right)
       case 'STAR': return checkNumOps(expr.op, mul)(left, right)
