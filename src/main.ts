@@ -16,23 +16,22 @@ function run(source: string): void {
   const scanner = new Scanner(source)
   const tokens = scanner.scanTokens()
   const parser = new Parser(tokens)
-  const expression = parser.parse()
+  const statements = parser.parse()
 
-  if (Err.hadError() || !expression) return;
+  if (Err.hadError() || statements.length === 0) return;
 
-  interpret(expression)
+  interpret(statements)
 }
 
-function runFile(path: string) {
-  return readFile(path, { encoding: 'utf-8' }).then(v => {
-    run(v)
-    if (Err.hadError()) {
-      process.exit(65)
-    }
-    if (Err.hadRuntimeError()) {
-      process.exit(70)
-    }
-  })
+async function runFile(path: string) {
+  const v = await readFile(path, { encoding: 'utf-8' })
+  run(v)
+  if (Err.hadError()) {
+    process.exit(65)
+  }
+  if (Err.hadRuntimeError()) {
+    process.exit(70)
+  }
 }
 
 function runPrompt() {

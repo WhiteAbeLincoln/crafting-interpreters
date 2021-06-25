@@ -1,4 +1,4 @@
-import { Expression, match } from '../ast/ast'
+import { Expression, Expr, Statement, Stmt } from '../ast/ast'
 import Token from '../scanner/token'
 import { ge, gt, le, lt, sub, neg, div, mul, Assertion } from '../util'
 import Logger from '../logger'
@@ -34,17 +34,17 @@ const assertNumber = (op: Token) => (a: ExpressionValue): asserts a is number =>
 
 const checkNumOps = <Args extends ExpressionValue[]>(t: Token, fn: ExprFn<Args, number>) => checkOps(assertNumber(t), fn)
 
-export const evaluate: (e: Expression) => ExpressionValue = match<ExpressionValue>({
-  'literal': ({ value }) => value,
-  'grouping': ({ expr }) => evaluate(expr),
-  'unary': expr => {
+export const evaluate: (e: Expression) => ExpressionValue = Expr.match({
+  'Literal': ({ value }) => value,
+  'Grouping': ({ expr }) => evaluate(expr),
+  'Unary': expr => {
     const right = evaluate(expr.expr)
     switch (expr.op.type) {
       case 'MINUS': return checkNumOps(expr.op, neg)(right)
       case 'BANG': return !isTruthy(right)
     }
   },
-  'binary': expr => {
+  'Binary': expr => {
     const left = evaluate(expr.left)
     const right = evaluate(expr.right)
     switch (expr.op.type) {
@@ -72,7 +72,19 @@ export const evaluate: (e: Expression) => ExpressionValue = match<ExpressionValu
       case 'BANG_EQUAL': return !isEqual(left, right)
       case 'EQUAL_EQUAL': return isEqual(left, right)
     }
-  }
+  },
+  'Variable': ( ) => null
+})
+
+const execute = Stmt.match({
+  'Expression': ({ value }) => {
+    evaluate(value)
+  },
+  'Print': ({ expr }) => {
+    const v = evaluate(expr)
+    Logger.stdout(stringify(v))
+  },
+  'Variable': () => {}
 })
 
 function stringify(val: ExpressionValue) {
@@ -87,10 +99,11 @@ function stringify(val: ExpressionValue) {
   return val.toString()
 }
 
-export function interpret(expr: Expression) {
+export function interpret(statements: Statement[]) {
   try {
-    const value = evaluate(expr)
-    Logger.stdout(stringify(value))
+    for (const stmt of statements) {
+      execute(stmt)
+    }
   } catch (err) {
     if (err instanceof RuntimeError) {
       runtimeError(err)

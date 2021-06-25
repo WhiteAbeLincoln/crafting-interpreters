@@ -1,6 +1,7 @@
-import { Expression, match } from './ast'
+import { Expression } from './ast'
+import { matcher } from '../util'
 
-export const print = match({
+export const print = matcher<Expression>()({
     'binary': ({ op, left, right }) => parenthesize(op.lexeme, left, right),
     'grouping': ({ expr }) => parenthesize("group", expr),
     'literal': ({ value }) => (value === null ? "nil"

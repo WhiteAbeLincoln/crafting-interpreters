@@ -1,4 +1,4 @@
-import { Expression, binary, unary, literal, grouping } from '../ast/ast'
+import { Expression, Expr, Statement, Stmt } from '../ast/ast'
 import TokenType from '../scanner/token-type'
 import Token, { GetTok, error } from '../scanner/token'
 
@@ -8,15 +8,51 @@ export class Parser {
   private current = 0;
   constructor(private tokens: Token[]) {}
 
-  parse(): Expression | null {
+  parse(): Statement[] {
+    const statements: Statement[] = []
+    while (!this.isAtEnd()) {
+      statements.push(this.declaration())
+    }
+
+    return statements
+  }
+
+  private declaration(): Statement {
     try {
-      return this.expression()
+      if (this.match('VAR')) return this.varDeclaration()
     } catch (err) {
       if (err instanceof ParseError) {
+        this.synchronize()
         return null
+      } else {
+        throw err
       }
-      throw err
     }
+  }
+
+  private varDeclaration(): Statement {
+    const name = this.consume('IDENTIFIER', "Expect variable name.")
+    const initializer = this.match('EQUAL') ? this.expression() : null
+    this.consume('SEMICOLON', "Expect ';' after variable declaration.")
+    return Stmt.Variable({ name, initializer })
+  }
+
+  private statement(): Statement {
+    if (this.match('PRINT')) return this.printStatement()
+
+    return this.expressionStatement()
+  }
+
+  private printStatement(): Statement {
+    const value = this.expression()
+    this.consume('SEMICOLON', "Expect ';' after value.")
+    return Stmt.Print({ expr: value })
+  }
+
+  private expressionStatement(): Statement {
+    const value = this.expression()
+    this.consume('SEMICOLON', "Expect ';' after expression.")
+    return Stmt.Expression({ value })
   }
 
   private expression(): Expression {
@@ -26,9 +62,9 @@ export class Parser {
   private equality(): Expression {
     let expr = this.comparison()
 
-    this.whileMatching('BANG_EQUAL', 'EQUAL_EQUAL', operator => {
+    this.whileMatching('BANG_EQUAL', 'EQUAL_EQUAL', op => {
       const right = this.comparison()
-      expr = binary(expr, operator, right)
+      expr = Expr.Binary({ left: expr, op, right })
     })
 
     return expr
@@ -37,9 +73,9 @@ export class Parser {
   private comparison(): Expression {
     let expr = this.term()
 
-    this.whileMatching('GREATER', 'GREATER_EQUAL', 'LESS', 'LESS_EQUAL', operator => {
+    this.whileMatching('GREATER', 'GREATER_EQUAL', 'LESS', 'LESS_EQUAL', op => {
       const right = this.term()
-      expr = binary(expr, operator, right)
+      expr = Expr.Binary({ left: expr, op, right })
     })
 
     return expr
@@ -48,9 +84,9 @@ export class Parser {
   private term(): Expression {
     let expr = this.factor()
 
-    this.whileMatching('MINUS', 'PLUS', operator => {
+    this.whileMatching('MINUS', 'PLUS', op => {
       const right = this.factor()
-      expr = binary(expr, operator, right)
+      expr = Expr.Binary({ left: expr, op, right })
     })
 
     return expr
@@ -59,38 +95,42 @@ export class Parser {
   private factor(): Expression {
     let expr = this.unary()
 
-    this.whileMatching('SLASH', 'STAR', operator => {
+    this.whileMatching('SLASH', 'STAR', op => {
       const right = this.unary()
-      expr = binary(expr, operator, right)
+      expr = Expr.Binary({ left: expr, op, right })
     })
 
     return expr;
   }
 
   private unary(): Expression {
-    const operator = this.match('BANG', 'MINUS')
-    if (operator) {
-      const right = this.unary()
-      return unary(operator, right)
+    const op = this.match('BANG', 'MINUS')
+    if (op) {
+      const expr = this.unary()
+      return Expr.Unary({ op, expr })
     }
 
     return this.primary()
   }
 
   private primary(): Expression {
-    if (this.match('FALSE')) return literal(false)
-    if (this.match('TRUE')) return literal(true)
-    if (this.match('NIL')) return literal(null)
+    if (this.match('FALSE')) return Expr.Literal({ value: false })
+    if (this.match('TRUE')) return Expr.Literal({ value: true })
+    if (this.match('NIL')) return Expr.Literal({ value: null })
 
     {
       const lit = this.match('NUMBER', 'STRING')
-      if (lit) return literal(lit.literal)
+      if (lit) return Expr.Literal({ value: lit.literal })
+    }
+
+    if (this.match('IDENTIFIER')) {
+      return
     }
 
     if (this.match('LEFT_PAREN')) {
       const expr = this.expression();
       this.consume('RIGHT_PAREN', "Expected ')' after expression.")
-      return grouping(expr)
+      return Expr.Grouping({ expr })
     }
 
     throw this.error(this.peek(), 'Expect expression.')
@@ -146,7 +186,6 @@ export class Parser {
   }
 
   // we don't use synchronize yet
-  // @ts-expect-error
   private synchronize(): void {
     let prev = this.advance();
 
