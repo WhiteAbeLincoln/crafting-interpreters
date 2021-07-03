@@ -1,6 +1,15 @@
-import { Expression, Expr, Statement, Stmt } from '../ast/ast'
-import TokenType from '../scanner/token-type'
-import Token, { GetTok, error } from '../scanner/token'
+import type { Expression, Statement } from '../ast/ast'
+import type { Token, GetTok, TokenType } from '../scanner/token-type'
+import { Expr, Stmt } from '../ast/ast'
+import { report } from '../errors/errors'
+
+function tokError(token: Token, message: string) {
+  if (token.type === 'EOF') {
+    report(token.line, " at end", message)
+  } else {
+    report(token.line, ` at '${token.lexeme}'`, message)
+  }
+}
 
 class ParseError extends Error {}
 
@@ -11,15 +20,20 @@ export class Parser {
   parse(): Statement[] {
     const statements: Statement[] = []
     while (!this.isAtEnd()) {
-      statements.push(this.declaration())
+      const decl = this.declaration()
+      if (decl) {
+        statements.push(decl)
+      }
     }
 
     return statements
   }
 
-  private declaration(): Statement {
+  private declaration(): Statement | null {
     try {
       if (this.match('VAR')) return this.varDeclaration()
+
+      return this.statement()
     } catch (err) {
       if (err instanceof ParseError) {
         this.synchronize()
@@ -34,13 +48,27 @@ export class Parser {
     const name = this.consume('IDENTIFIER', "Expect variable name.")
     const initializer = this.match('EQUAL') ? this.expression() : null
     this.consume('SEMICOLON', "Expect ';' after variable declaration.")
-    return Stmt.Variable({ name, initializer })
+    return Stmt.Declaration({ name, initializer })
   }
 
   private statement(): Statement {
     if (this.match('PRINT')) return this.printStatement()
+    if (this.match('LEFT_BRACE')) return Stmt.Block({ statements: this.block() })
 
     return this.expressionStatement()
+  }
+
+  private block(): Statement[] {
+    const statements: Statement[] = []
+    while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
+      const decl = this.declaration()
+      if (decl) {
+        statements.push(decl)
+      }
+    }
+
+    this.consume('RIGHT_BRACE', "Expect '}' after block.");
+    return statements
   }
 
   private printStatement(): Statement {
@@ -56,7 +84,28 @@ export class Parser {
   }
 
   private expression(): Expression {
-    return this.equality()
+    return this.assignment()
+  }
+
+  private assignment(): Expression {
+    const expr = this.equality()
+
+    {
+      const lit = this.match('EQUAL')
+      if (lit) {
+        const equals = lit
+        const value = this.assignment()
+
+        if (expr.kind === 'Variable') {
+          const name = expr.name
+          return Expr.Assign({ name, value })
+        }
+
+        tokError(equals, "Invalid assignment target.")
+      }
+    }
+
+    return expr
   }
 
   private equality(): Expression {
@@ -123,8 +172,9 @@ export class Parser {
       if (lit) return Expr.Literal({ value: lit.literal })
     }
 
-    if (this.match('IDENTIFIER')) {
-      return
+    {
+      const lit = this.match('IDENTIFIER')
+      if (lit) return Expr.Variable({ name: lit })
     }
 
     if (this.match('LEFT_PAREN')) {
@@ -181,7 +231,7 @@ export class Parser {
   }
 
   private error(token: Token, message: string) {
-    error(token, message)
+    tokError(token, message)
     return new ParseError()
   }
 

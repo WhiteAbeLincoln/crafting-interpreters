@@ -1,5 +1,6 @@
-import Token, { TokenBase } from '../scanner/token'
-import { tagged, GetPhantomType, t } from '../util'
+import type { GetPhantomType } from '../util/types'
+import type { Token, TokenBase } from '../scanner/token-type'
+import { tagged, t } from '../util/util'
 
 export type UnOpTokens = TokenBase<'MINUS' | 'BANG'>
 export type BinOpTokens = TokenBase<
@@ -10,20 +11,23 @@ export type BinOpTokens = TokenBase<
                         | 'STAR'        | 'SLASH'
                         >
 
+export type ExpressionValue = string | number | boolean | null
 export const Expr = tagged(E => ({
-  Literal: { value: t<string|number|boolean|null>() },
+  Literal: { value: t<ExpressionValue>() },
   Unary: { expr: E, op: t<UnOpTokens>() },
   Binary: { left: E, right: E, op: t<BinOpTokens>() },
   Grouping: { expr: E },
-  Variable: { name: t<Token>() }
+  Variable: { name: t<Token>() },
+  Assign: { name: t<Token>(), value: E }
 }))
 
 export type Expression = GetPhantomType<typeof Expr>
 
-export const Stmt = tagged({
+export const Stmt = tagged(S => ({
   Expression: { value: t<Expression>() },
   Print: { expr: t<Expression>() },
-  Variable: { name: t<Token>(), initializer: t<Expression|null>() },
-})
+  Declaration: { name: t<Token>(), initializer: t<Expression|null>() },
+  Block: { statements: t<Array<typeof S>>() }
+}))
 
 export type Statement = GetPhantomType<typeof Stmt>

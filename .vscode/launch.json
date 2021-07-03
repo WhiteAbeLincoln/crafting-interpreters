@@ -16,7 +16,15 @@
       "outFiles": [
         "${workspaceFolder}/build/**/*.js"
       ],
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "args": ["${input:file}"]
+    }
+  ],
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "file",
+      "description": "Lox file to run"
     }
   ]
 }

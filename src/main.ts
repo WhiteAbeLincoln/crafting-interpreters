@@ -1,31 +1,50 @@
-import Err from './errors'
-import Logger from './logger'
+import Err from './errors/errors'
+import Logger from './logger/logger'
 import { ConsoleLoggerHandler } from './logger/console-logger'
 import { LoggerErrorHandler } from './errors/console-handler'
 import { readFile } from 'fs/promises'
 import repl from 'repl'
-import { useDeferred } from './util'
+import { useDeferred } from './util/util'
 import { Parser } from './parser/parser'
 import { Scanner } from './scanner/scanner'
 import { interpret } from './interpreter/interpreter'
+import { Environment } from './environment/environment'
+import { print } from './ast/printer'
 
 Logger.setHandler(new ConsoleLoggerHandler())
 Err.setHandler(new LoggerErrorHandler())
 
-function run(source: string): void {
+function getAst(source: string) {
   const scanner = new Scanner(source)
   const tokens = scanner.scanTokens()
   const parser = new Parser(tokens)
   const statements = parser.parse()
 
-  if (Err.hadError() || statements.length === 0) return;
+  if (Err.hadError() || statements.length === 0) {
+    return null
+  }
 
-  interpret(statements)
+  return statements
 }
 
-async function runFile(path: string) {
+function run(source: string, env = new Environment()): void {
+  const statements = getAst(source)
+  if (statements) {
+    interpret(statements, env)
+  }
+}
+
+function printAst(text: string) {
+    const ast = getAst(text)
+    if (ast) {
+      return ast.map(print).join('\n')
+    }
+    return '[Error]'
+}
+
+const withFile = (fn: (contents: string) => void) => async (path: string) => {
   const v = await readFile(path, { encoding: 'utf-8' })
-  run(v)
+  fn(v)
   if (Err.hadError()) {
     process.exit(65)
   }
@@ -34,11 +53,16 @@ async function runFile(path: string) {
   }
 }
 
+const runFile = withFile(run)
+const printFileAst = withFile(text => Logger.stdout(printAst(text)))
+
 function runPrompt() {
   const [promise, res] = useDeferred<undefined>()
   const isRecoverableError = (_e: Error) => {
     return false
   }
+
+  let env = new Environment()
 
   const replEval: repl.REPLEval = function replEval(
     evalCmd,
@@ -48,7 +72,7 @@ function runPrompt() {
   ) {
     let result: string | undefined
     try {
-      run(evalCmd)
+      run(evalCmd, env)
       if (Err.hadError()) {
         Err.reset()
       }
@@ -73,6 +97,28 @@ function runPrompt() {
     writer,
     ignoreUndefined: true,
   })
+  replServer.defineCommand('reset', {
+    help: 'Reset the execution environment',
+    action() {
+      this.clearBufferedCommand()
+      env = new Environment()
+      replServer.output.write('Environment reset')
+    }
+  })
+  replServer.defineCommand('env', {
+    help: 'Print the execution environment',
+    action() {
+      this.clearBufferedCommand()
+      replServer.output.write(env.print())
+    }
+  })
+  replServer.defineCommand('ast', {
+    help: 'Print the ast of the given code',
+    action(text) {
+      this.clearBufferedCommand()
+      replServer.output.write(printAst(text))
+    }
+  })
 
   replServer.on('exit', () => {
     res(undefined)
@@ -82,14 +128,24 @@ function runPrompt() {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const args = argv.slice(2)
+  let args = argv.slice(2)
+  let showAst = false
+  if (args[0] == '--ast') {
+    showAst = true
+    args = args.slice(1)
+  }
 
   try {
     if (args.length > 1) {
-      Logger.stdout(`Usage: ${argv[0]} ${argv[1]} [script]`)
+      Logger.stdout(`Usage: tslox [--ast] [script]`)
       return 64
     } else if (args[0]) {
-      await runFile(args[0])
+      if (showAst) {
+        await printFileAst(args[0])
+      }
+      else {
+        await runFile(args[0])
+      }
     } else {
       await runPrompt()
     }

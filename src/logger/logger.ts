@@ -1,4 +1,4 @@
-import { SingletonHandler } from '../util'
+import { SingletonHandler } from '../util/util'
 
 export interface LoggerHandler {
   stdout(text: string): void

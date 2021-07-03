@@ -1,5 +1,5 @@
-import Token from '../scanner/token'
-import { SingletonHandler } from '../util'
+import type { Token } from '../scanner/token-type'
+import { SingletonHandler } from '../util/util'
 
 export type ErrorKind = 'source' | 'runtime'
 

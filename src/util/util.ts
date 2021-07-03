@@ -1,4 +1,4 @@
-import {
+import type {
   Assert,
   DiscriminatingKeys,
   MustInclude,
@@ -7,6 +7,7 @@ import {
   TaggedConstructors,
   TaggedMatcher,
   TaggedUnion,
+  Equal,
 } from './types'
 
 export const useDeferred = <T = never>(): readonly [
@@ -162,12 +163,18 @@ type UnionBase = Record<
   PropertyKey,
   Record<PropertyKey, (void & { __type: unknown }) | TaggedRef>
 >
+type ReplaceTypeOnce<T, Match, R> = Equal<T, Match> extends '1' ? R : T
+type ReplaceType<T, Match, R> =
+  T extends object
+    ? { [k in keyof T]: ReplaceType<T[k], Match, R> }
+    : ReplaceTypeOnce<T, Match, R>
+
 type MkTagged<Def extends UnionBase, Key extends PropertyKey> = TaggedUnion<
   {
     [k in keyof Def]: {
       [p in keyof Def[k]]: Def[k][p] extends TaggedRef
         ? MkTagged<Def, Key>
-        : GetPhantomType<Def[k][p]>
+        : ReplaceType<GetPhantomType<Def[k][p]>, TaggedRef, MkTagged<Def, Key>>
     }
   },
   Key
@@ -191,18 +198,17 @@ export function tagged<UnionDef extends UnionBase, Key extends PropertyKey>(
   key: Key
 ): TaggedResult<UnionDef, Key>
 export function tagged<
-  UnionDef extends UnionBase,
-  Key extends PropertyKey = 'kind'
+  UnionDef extends UnionBase
 >(
   def: UnionDef | ((U: TaggedRef) => UnionDef),
-  key: Key = 'kind' as Key
-): TaggedResult<UnionDef, Key> {
+  key: PropertyKey = 'kind'
+): TaggedResult<UnionDef, PropertyKey> {
   const unionDef = typeof def === 'function' ? def(undefined as any) : def
-  type Res = TaggedResult<UnionDef, Key>
+  type Res = TaggedResult<UnionDef, PropertyKey>
   type U = Res['__type']
   const base = {
     __type: undefined as unknown as U,
-    match: matcher<U, Assert<Key, keyof U>>(key),
+    match: matcher<U, keyof U>(key),
   }
 
   return Object.keys(unionDef).reduce((acc, k) => {
