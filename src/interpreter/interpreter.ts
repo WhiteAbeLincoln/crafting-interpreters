@@ -6,6 +6,7 @@ import { ge, gt, le, lt, sub, neg, div, mul } from '../util/util'
 import Logger from '../logger/logger'
 import { runtimeError, RuntimeError } from '../errors/errors'
 import { Environment } from '../environment/environment'
+import { stringify } from './utils'
 
 function isTruthy(val: ExpressionValue): boolean {
   if (val == null) return false
@@ -91,7 +92,7 @@ const execute = (env: Environment) => Stmt.match({
     Logger.stdout(stringify(v))
   },
   'Declaration': ({ initializer, name }) => {
-    const value = initializer === null ? null : evaluate(env)(initializer)
+    const value = initializer === null ? undefined : evaluate(env)(initializer)
     env.define(name.lexeme, value)
     return null
   },
@@ -109,18 +110,6 @@ const execute = (env: Environment) => Stmt.match({
     return null
   }
 })
-
-function stringify(val: ExpressionValue) {
-  if (val == null) return 'nil'
-  if (typeof val === 'number') {
-    let text = val.toString()
-    if (text.endsWith('.0')) {
-      text = text.substring(0, text.length - 2)
-    }
-    return text
-  }
-  return val.toString()
-}
 
 export function interpret(statements: Statement[], env = new Environment()) {
   try {
