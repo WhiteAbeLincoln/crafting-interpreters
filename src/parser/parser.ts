@@ -23,8 +23,7 @@ export class Parser {
       const s = this.tryExpr()
       if (s) {
         return [s]
-      }
-      else {
+      } else {
         this.current = 0
       }
     }
@@ -69,24 +68,74 @@ export class Parser {
       } else {
         throw err
       }
-    }
-    finally {
+    } finally {
       this.reportErr = true
     }
   }
 
   private varDeclaration(): Statement {
-    const name = this.consume('IDENTIFIER', "Expect variable name.")
+    const name = this.consume('IDENTIFIER', 'Expect variable name.')
     const initializer = this.match('EQUAL') ? this.expression() : null
     this.consume('SEMICOLON', "Expect ';' after variable declaration.")
     return Stmt.Declaration({ name, initializer })
   }
 
   private statement(): Statement {
+    if (this.match('FOR')) return this.forStatement()
+    if (this.match('IF')) return this.ifStatement()
     if (this.match('PRINT')) return this.printStatement()
-    if (this.match('LEFT_BRACE')) return Stmt.Block({ statements: this.block() })
+    if (this.match('WHILE')) return this.whileStatement()
+    if (this.match('LEFT_BRACE'))
+      return Stmt.Block({ statements: this.block() })
 
     return this.expressionStatement()
+  }
+
+  private forStatement(): Statement {
+    this.consume('LEFT_PAREN', "Expect '(' after 'for'.")
+    const initializer = this.match('SEMICOLON')
+      ? null
+      : this.match('VAR')
+      ? this.varDeclaration()
+      : this.expressionStatement()
+
+    const condition = !this.check('SEMICOLON') ? this.expression() : Expr.Literal({ value: true })
+    this.consume('SEMICOLON', "Expect ';' after for loop condition.")
+    const increment = !this.check('RIGHT_PAREN') ? this.expression() : null
+    this.consume('RIGHT_PAREN', "Expect ')' after for loop clause.")
+    let body = this.statement()
+
+    if (increment != null) {
+      body = Stmt.Block({ statements: [body, Stmt.Expression({ value: increment })] })
+    }
+
+    body = Stmt.While({ condition, body })
+
+    if (initializer != null) {
+      body = Stmt.Block({ statements: [initializer, body] })
+    }
+
+    return body
+  }
+
+  private whileStatement(): Statement {
+    this.consume('LEFT_PAREN', "Expect '(' after 'while'.")
+    const condition = this.expression()
+    this.consume('RIGHT_PAREN', "Expect ')' after condition.")
+    const body = this.statement()
+
+    return Stmt.While({ condition, body })
+  }
+
+  private ifStatement(): Statement {
+    this.consume('LEFT_PAREN', "Expect '(' after 'if'.")
+    const condition = this.expression()
+    this.consume('RIGHT_PAREN', "Expect ')' after condition.")
+
+    const thenBranch = this.statement()
+    const elseBranch = this.match('ELSE') ? this.statement() : null
+
+    return Stmt.If({ condition, thenBranch, elseBranch })
   }
 
   private block(): Statement[] {
@@ -98,7 +147,7 @@ export class Parser {
       }
     }
 
-    this.consume('RIGHT_BRACE', "Expect '}' after block.");
+    this.consume('RIGHT_BRACE', "Expect '}' after block.")
     return statements
   }
 
@@ -119,7 +168,7 @@ export class Parser {
   }
 
   private assignment(): Expression {
-    const expr = this.equality()
+    const expr = this.or()
 
     {
       const lit = this.match('EQUAL')
@@ -132,9 +181,31 @@ export class Parser {
           return Expr.Assign({ name, value })
         }
 
-        tokError(equals, "Invalid assignment target.")
+        tokError(equals, 'Invalid assignment target.')
       }
     }
+
+    return expr
+  }
+
+  private or(): Expression {
+    let expr = this.and()
+
+    this.whileMatching('OR', op => {
+      const right = this.and()
+      expr = Expr.Logical({ left: expr, op, right })
+    })
+
+    return expr
+  }
+
+  private and(): Expression {
+    let expr = this.equality()
+
+    this.whileMatching('AND', op => {
+      const right = this.equality()
+      expr = Expr.Logical({ left: expr, op, right })
+    })
 
     return expr
   }
@@ -180,7 +251,7 @@ export class Parser {
       expr = Expr.Binary({ left: expr, op, right })
     })
 
-    return expr;
+    return expr
   }
 
   private unary(): Expression {
@@ -209,7 +280,7 @@ export class Parser {
     }
 
     if (this.match('LEFT_PAREN')) {
-      const expr = this.expression();
+      const expr = this.expression()
       this.consume('RIGHT_PAREN', "Expected ')' after expression.")
       return Expr.Grouping({ expr })
     }
@@ -225,22 +296,28 @@ export class Parser {
     return null
   }
 
-  private whileMatching<Toks extends TokenType>(...args: [...types: Toks[], fn: (matched: GetTok<Toks>) => void]): void {
+  private whileMatching<Toks extends TokenType>(
+    ...args: [...types: Toks[], fn: (matched: GetTok<Toks>) => void]
+  ): void {
     const types = args.slice(0, args.length - 1) as Toks[]
     const fn = args[args.length - 1] as (matched: GetTok<Toks>) => void
 
-    for (let matched: GetTok<Toks> | null = null; (matched = this.match(...types)) !== null;) {
+    for (
+      let matched: GetTok<Toks> | null = null;
+      (matched = this.match(...types)) !== null;
+
+    ) {
       fn(matched)
     }
   }
 
   private check(type: TokenType): boolean {
     if (this.isAtEnd()) return false
-    return this.peek().type == type;
+    return this.peek().type == type
   }
 
   private advance(): Token {
-    const curr = this.peek();
+    const curr = this.peek()
     if (!this.isAtEnd()) this.current++
     return curr
   }
@@ -251,7 +328,9 @@ export class Parser {
 
   private peek(): Token {
     const tok = this.tokens[this.current]
-    if (!tok) { throw new Error('Fatal failure in parser - token idx out of bounds') }
+    if (!tok) {
+      throw new Error('Fatal failure in parser - token idx out of bounds')
+    }
     return tok
   }
 
@@ -270,10 +349,10 @@ export class Parser {
 
   // we don't use synchronize yet
   private synchronize(): void {
-    let prev = this.advance();
+    let prev = this.advance()
 
     while (!this.isAtEnd()) {
-      if (prev.type == 'SEMICOLON') return;
+      if (prev.type == 'SEMICOLON') return
 
       switch (this.peek().type) {
         case 'CLASS':
@@ -287,7 +366,7 @@ export class Parser {
           return
       }
 
-      prev = this.advance();
+      prev = this.advance()
     }
   }
 }

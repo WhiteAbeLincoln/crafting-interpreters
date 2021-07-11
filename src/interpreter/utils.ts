@@ -11,3 +11,15 @@ export function stringify(val: ExpressionValue) {
   }
   return val.toString()
 }
+
+export function isTruthy(val: ExpressionValue): boolean {
+  if (val == null) return false
+  if (typeof val === 'boolean') return val
+  return true
+}
+
+export function isEqual(a: ExpressionValue, b: ExpressionValue): boolean {
+  if (a == null && b == null) return true
+  if (a == null) return false
+  return a === b
+}

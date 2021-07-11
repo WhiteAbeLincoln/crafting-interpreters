@@ -10,6 +10,7 @@ export type BinOpTokens = TokenBase<
                         | 'PLUS'        | 'MINUS'
                         | 'STAR'        | 'SLASH'
                         >
+export type LogicalOpTokens = TokenBase<'AND' | 'OR'>
 
 export type ExpressionValue = string | number | boolean | null
 export const Expr = tagged(E => ({
@@ -18,7 +19,8 @@ export const Expr = tagged(E => ({
   Binary: { left: E, right: E, op: t<BinOpTokens>() },
   Grouping: { expr: E },
   Variable: { name: t<Token>() },
-  Assign: { name: t<Token>(), value: E }
+  Assign: { name: t<Token>(), value: E },
+  Logical: { left: E, right: E, op: t<LogicalOpTokens>() }
 }))
 
 export type Expression = GetPhantomType<typeof Expr>
@@ -27,7 +29,9 @@ export const Stmt = tagged(S => ({
   Expression: { value: t<Expression>() },
   Print: { expr: t<Expression>() },
   Declaration: { name: t<Token>(), initializer: t<Expression|null>() },
-  Block: { statements: t<Array<typeof S>>() }
+  Block: { statements: t<Array<typeof S>>() },
+  If: { condition: t<Expression>(), thenBranch: S, elseBranch: t<typeof S | null>() },
+  While: { condition: t<Expression>(), body: S }
 }))
 
 export type Statement = GetPhantomType<typeof Stmt>

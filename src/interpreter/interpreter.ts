@@ -6,19 +6,7 @@ import { ge, gt, le, lt, sub, neg, div, mul } from '../util/util'
 import Logger from '../logger/logger'
 import { runtimeError, RuntimeError } from '../errors/errors'
 import { Environment } from '../environment/environment'
-import { stringify } from './utils'
-
-function isTruthy(val: ExpressionValue): boolean {
-  if (val == null) return false
-  if (typeof val === 'boolean') return val
-  return true
-}
-
-function isEqual(a: ExpressionValue, b: ExpressionValue): boolean {
-  if (a == null && b == null) return true
-  if (a == null) return false
-  return a === b
-}
+import { stringify, isTruthy, isEqual } from './utils'
 
 type ExprFn<Args extends ExpressionValue[], B extends ExpressionValue> = (...params: { [k in keyof Args]: Args[k] & B }) => ExpressionValue
 function checkOps<B extends ExpressionValue, Args extends ExpressionValue[]>(pred: Assertion<ExpressionValue, B>, fn: ExprFn<Args, B>) {
@@ -80,36 +68,59 @@ export const evaluate: (env: Environment) => (e: Expression) => ExpressionValue 
     const val = evaluate(env)(value)
     env.assign(name, val)
     return val
+  },
+  'Logical': expr => {
+    const left = evaluate(env)(expr.left)
+    if (expr.op.type === 'OR') {
+      if (isTruthy(left)) return left
+    }
+    else {
+      if (!isTruthy(left)) return left
+    }
+
+    return evaluate(env)(expr.right)
   }
 })
 
-const execute = (env: Environment) => Stmt.match({
-  'Expression': ({ value }) => {
-    evaluate(env)(value)
-  },
-  'Print': ({ expr }) => {
-    const v = evaluate(env)(expr)
-    Logger.stdout(stringify(v))
-  },
-  'Declaration': ({ initializer, name }) => {
-    const value = initializer === null ? undefined : evaluate(env)(initializer)
-    env.define(name.lexeme, value)
-    return null
-  },
-  'Block': ({ statements }) => {
-    // We do not need a separate executeBlock function.
-    // The call stack handles restoring the environment since we pass in our environment as a parameter.
-    // each recursive call corresponds exactly to a block and exiting the call returns us to the
-    // previous call, which contains the parent environment
+const execute = (env: Environment) =>
+  Stmt.match({
+    Expression: ({ value }) => {
+      evaluate(env)(value)
+    },
+    Print: ({ expr }) => {
+      const v = evaluate(env)(expr)
+      Logger.stdout(stringify(v))
+    },
+    Declaration: ({ initializer, name }) => {
+      const value =
+        initializer === null ? undefined : evaluate(env)(initializer)
+      env.define(name.lexeme, value)
+    },
+    Block: ({ statements }) => {
+      // We do not need a separate executeBlock function.
+      // The call stack handles restoring the environment since we pass in our environment as a parameter.
+      // each recursive call corresponds exactly to a block and exiting the call returns us to the
+      // previous call, which contains the parent environment
 
-    // this is even mentioned in Crafting Interpreters (see a sidebar at 8.5.2)
-    // Bob Nystrom said that adding an environment parameter to each visit method was too verbose/tedious
-    // but since we are using pattern matching instead of visitors, we only have to add it in one place
-    // (two to handle expression evaluation)
-    statements.forEach(execute(new Environment(env)))
-    return null
-  }
-})
+      // this is even mentioned in Crafting Interpreters (see a sidebar at 8.5.2)
+      // Bob Nystrom said that adding an environment parameter to each visit method was too verbose/tedious
+      // but since we are using pattern matching instead of visitors, we only have to add it in one place
+      // (two to handle expression evaluation)
+      statements.forEach(execute(new Environment(env)))
+    },
+    If: ({ condition, thenBranch, elseBranch }) => {
+      if (isTruthy(evaluate(env)(condition))) {
+        execute(env)(thenBranch)
+      } else if (elseBranch) {
+        execute(env)(elseBranch)
+      }
+    },
+    While: ({ condition, body }) => {
+      while (isTruthy(evaluate(env)(condition))) {
+        execute(env)(body)
+      }
+    }
+  })
 
 export function interpret(statements: Statement[], env = new Environment()) {
   try {
