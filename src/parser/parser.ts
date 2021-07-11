@@ -14,10 +14,21 @@ function tokError(token: Token, message: string) {
 class ParseError extends Error {}
 
 export class Parser {
-  private current = 0;
+  private current = 0
+  private reportErr = true
   constructor(private tokens: Token[]) {}
 
-  parse(): Statement[] {
+  parse(expr = false): Statement[] {
+    if (expr) {
+      const s = this.tryExpr()
+      if (s) {
+        return [s]
+      }
+      else {
+        this.current = 0
+      }
+    }
+
     const statements: Statement[] = []
     while (!this.isAtEnd()) {
       const decl = this.declaration()
@@ -41,6 +52,26 @@ export class Parser {
       } else {
         throw err
       }
+    }
+  }
+
+  private tryExpr(): Statement | null {
+    try {
+      this.reportErr = false
+      const v = this.expression()
+      if (!this.isAtEnd()) {
+        return null
+      }
+      return Stmt.Print({ expr: v })
+    } catch (err) {
+      if (err instanceof ParseError) {
+        return null
+      } else {
+        throw err
+      }
+    }
+    finally {
+      this.reportErr = true
     }
   }
 
@@ -231,7 +262,9 @@ export class Parser {
   }
 
   private error(token: Token, message: string) {
-    tokError(token, message)
+    if (this.reportErr) {
+      tokError(token, message)
+    }
     return new ParseError()
   }
 

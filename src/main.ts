@@ -14,11 +14,11 @@ import { print } from './ast/printer'
 Logger.setHandler(new ConsoleLoggerHandler())
 Err.setHandler(new LoggerErrorHandler())
 
-function getAst(source: string) {
+function getAst(source: string, inRepl = false) {
   const scanner = new Scanner(source)
   const tokens = scanner.scanTokens()
   const parser = new Parser(tokens)
-  const statements = parser.parse()
+  const statements = parser.parse(inRepl)
 
   if (Err.hadError() || statements.length === 0) {
     return null
@@ -27,8 +27,8 @@ function getAst(source: string) {
   return statements
 }
 
-function run(source: string, env = new Environment()): void {
-  const statements = getAst(source)
+function run(source: string, env = new Environment(), inRepl = false): void {
+  const statements = getAst(source, inRepl)
   if (statements) {
     interpret(statements, env)
   }
@@ -72,7 +72,10 @@ function runPrompt() {
   ) {
     let result: string | undefined
     try {
-      run(evalCmd, env)
+      // we tell the parser to first attempt to parse the entire input as an expression
+      // if that succeeds, then the expression is wrapped in a print statement for the repl
+      // otherwise we parse as a statement
+      run(evalCmd, env, true)
       if (Err.hadError()) {
         Err.reset()
       }
