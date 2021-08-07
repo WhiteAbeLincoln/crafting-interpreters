@@ -8,6 +8,7 @@ import type {
   TaggedMatcher,
   TaggedUnion,
   Equal,
+  UnionToIntersection,
 } from './types'
 
 export const useDeferred = <T = never>(): readonly [
@@ -215,4 +216,10 @@ export function tagged<
     acc[k as keyof Res] = ((data: any) => ({ ...data, [key]: k })) as any
     return acc
   }, base as unknown as Res)
+}
+
+export function static_assert<_T extends '1'>() {}
+
+export function invertRecord<T extends Record<PropertyKey, PropertyKey>>(obj: T) {
+  return Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k] as const)) as UnionToIntersection<{ [k in keyof T]: Record<T[k], k> }[keyof T]>
 }

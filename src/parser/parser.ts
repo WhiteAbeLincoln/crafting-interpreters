@@ -1,5 +1,5 @@
 import type { Expression, Statement } from '../ast/ast'
-import type { Token, GetTok, TokenType } from '../scanner/token-type'
+import type { Token, GetTok, TokenType, TokenBase } from '../scanner/token-type'
 import { Expr, Stmt } from '../ast/ast'
 import { report } from '../errors/errors'
 
@@ -16,6 +16,9 @@ class ParseError extends Error {}
 export class Parser {
   private current = 0
   private reportErr = true
+  private inLoop = false
+  private labelStack: string[] = []
+  private loopLabelStack: string[] = []
   constructor(private tokens: Token[]) {}
 
   parse(expr = false): Statement[] {
@@ -80,18 +83,94 @@ export class Parser {
     return Stmt.Declaration({ name, initializer })
   }
 
-  private statement(): Statement {
-    if (this.match('FOR')) return this.forStatement()
+  private blockStatement(label?: TokenBase<'IDENTIFIER'>): Statement | null {
+    if (this.match('FOR')) return this.forStatement(label ?? null)
     if (this.match('IF')) return this.ifStatement()
+    if (this.match('WHILE')) return this.whileStatement(label ?? null)
+    if (this.match('LEFT_BRACE')) return Stmt.Block({ statements: this.block() })
+
+    return null
+  }
+
+  private label(): Statement {
+    const label = this.consume('IDENTIFIER', "Expect label after ':'.")
+
+    this.labelStack.push(label.lexeme)
+    const block = this.blockStatement(label)
+    if (!block) {
+      throw this.error(this.peek(), 'Expect a block after a label.')
+    }
+    this.labelStack.pop()
+
+    return Stmt.Label({ label: label.lexeme, stmt: block })
+  }
+
+  private statement(): Statement {
+    // we use colon as a label prefix rather than the traditional suffix
+    // form because I didn't want to introduce lookahead and didn't
+    // want to rewrite the rest of the statement parser
+    if (this.match('COLON')) return this.label()
+
+    const blockStmt = this.blockStatement()
+    if (blockStmt) return blockStmt
+
     if (this.match('PRINT')) return this.printStatement()
-    if (this.match('WHILE')) return this.whileStatement()
-    if (this.match('LEFT_BRACE'))
-      return Stmt.Block({ statements: this.block() })
+    const breaktok = this.match('BREAK')
+    if (breaktok) {
+      if (!this.canBreak()) {
+        throw this.error(breaktok, 'Illegal break statement.')
+      }
+      return this.breakStatement()
+    }
+
+    const continuetok = this.match('CONTINUE')
+    if (continuetok) {
+      if (!this.inLoop) {
+        throw this.error(continuetok, 'Illegal continue statement.')
+      }
+      return this.continueStatement()
+    }
 
     return this.expressionStatement()
   }
 
-  private forStatement(): Statement {
+  private canBreak(): boolean {
+    return this.labelStack.length !== 0 || this.inLoop
+  }
+
+  private breakStatement(): Statement {
+    const label = this.match('IDENTIFIER');
+    if (label && !this.labelStack.includes(label.lexeme)) {
+      throw this.error(label, `Enclosing labeled block not found: ${label.lexeme}.`)
+    }
+    this.consume('SEMICOLON', "Expect ';' after break statement.")
+    return Stmt.Break({ label })
+  }
+
+  private continueStatement(): Statement {
+    const label = this.match('IDENTIFIER');
+    if (label && !this.loopLabelStack.includes(label.lexeme)) {
+      throw this.error(label, `Enclosing labeled loop not found: ${label.lexeme}.`)
+    }
+    this.consume('SEMICOLON', "Expect ';' after continue statement.")
+    return Stmt.Continue({ label })
+  }
+
+  private loopBodyStatement(label: TokenBase<'IDENTIFIER'> | null): Statement {
+    if (label) {
+      this.loopLabelStack.push(label.lexeme)
+    }
+    const wasInLoop = this.inLoop
+    this.inLoop = true
+    const stmt = this.statement()
+    this.inLoop = wasInLoop
+    if (label) {
+      this.loopLabelStack.pop()
+    }
+    return stmt
+  }
+
+  private forStatement(label: TokenBase<'IDENTIFIER'> | null): Statement {
     this.consume('LEFT_PAREN', "Expect '(' after 'for'.")
     const initializer = this.match('SEMICOLON')
       ? null
@@ -103,7 +182,7 @@ export class Parser {
     this.consume('SEMICOLON', "Expect ';' after for loop condition.")
     const increment = !this.check('RIGHT_PAREN') ? this.expression() : null
     this.consume('RIGHT_PAREN', "Expect ')' after for loop clause.")
-    let body = this.statement()
+    let body = Stmt.ContinuePoint({ label: label?.lexeme, stmt: this.loopBodyStatement(label) })
 
     if (increment != null) {
       body = Stmt.Block({ statements: [body, Stmt.Expression({ value: increment })] })
@@ -118,11 +197,11 @@ export class Parser {
     return body
   }
 
-  private whileStatement(): Statement {
+  private whileStatement(label: TokenBase<'IDENTIFIER'> | null): Statement {
     this.consume('LEFT_PAREN', "Expect '(' after 'while'.")
     const condition = this.expression()
     this.consume('RIGHT_PAREN', "Expect ')' after condition.")
-    const body = this.statement()
+    const body = Stmt.ContinuePoint({ label: label?.lexeme, stmt: this.loopBodyStatement(label) })
 
     return Stmt.While({ condition, body })
   }
@@ -334,10 +413,13 @@ export class Parser {
     return tok
   }
 
-  private consume(type: TokenType, message: string): Token {
-    if (this.check(type)) return this.advance()
+  private consume<T extends TokenType>(type: T, message: string): GetTok<T> {
+    const tok = this.match(type)
 
-    throw this.error(this.peek(), message)
+    if (!tok)
+      throw this.error(this.peek(), message)
+
+    return tok
   }
 
   private error(token: Token, message: string) {

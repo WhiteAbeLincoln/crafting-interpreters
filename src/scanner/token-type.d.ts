@@ -1,33 +1,41 @@
 import type { DiscriminateUnion } from '../util/types'
 
+// Single-character tokens.
+type SingleCharTokens =
+  | 'LEFT_PAREN' | 'RIGHT_PAREN'
+  | 'LEFT_BRACE' | 'RIGHT_BRACE'
+  | 'COMMA'      | 'DOT'
+  | 'MINUS'      | 'PLUS'
+  | 'SEMICOLON'  | 'SLASH'
+  | 'STAR'       | 'COLON'
+
+// One or two character tokens.
+type OneToTwoCharTokens =
+  | 'BANG'    | 'BANG_EQUAL'
+  | 'EQUAL'   | 'EQUAL_EQUAL'
+  | 'GREATER' | 'GREATER_EQUAL'
+  | 'LESS'    | 'LESS_EQUAL'
+
+// Literals.
+type Literals =
+  | 'IDENTIFIER' | 'STRING'
+  | 'NUMBER'
+
+// Keywords.
+export type Keywords =
+  | 'AND'   | 'CLASS'  | 'ELSE'
+  | 'FALSE' | 'FUN'    | 'FOR'
+  | 'IF'    | 'NIL'    | 'OR'
+  | 'PRINT' | 'RETURN' | 'SUPER'
+  | 'THIS'  | 'TRUE'   | 'VAR'
+  | 'WHILE' | 'BREAK'  | 'CONTINUE'
+
 export type TokenType =
-  // Single-character tokens.
-  'LEFT_PAREN' | 'RIGHT_PAREN' |
-  'LEFT_BRACE' | 'RIGHT_BRACE' |
-  'COMMA'      | 'DOT'         |
-  'MINUS'      | 'PLUS'        |
-  'SEMICOLON'  | 'SLASH'       |
-  'STAR'       |
-
-  // One or two character tokens.
-  'BANG'    | 'BANG_EQUAL'    |
-  'EQUAL'   | 'EQUAL_EQUAL'   |
-  'GREATER' | 'GREATER_EQUAL' |
-  'LESS'    | 'LESS_EQUAL'    |
-
-  // Literals.
-  'IDENTIFIER' | 'STRING' |
-  'NUMBER'     |
-
-  // Keywords.
-  'AND'   | 'CLASS'  | 'ELSE'  |
-  'FALSE' | 'FUN'    | 'FOR'   |
-  'IF'    | 'NIL'    | 'OR'    |
-  'PRINT' | 'RETURN' | 'SUPER' |
-  'THIS'  | 'TRUE'   | 'VAR'   |
-  'WHILE' |
-
-  'EOF'
+  | SingleCharTokens
+  | OneToTwoCharTokens
+  | Literals
+  | Keywords
+  | 'EOF'
 
 export interface TokenBase<T extends TokenType> {
   readonly type: T

@@ -28,11 +28,15 @@ export const print: (v: Expression | Statement) => string = matcher<
     elseBranch
       ? parenthesize('if', condition, thenBranch, elseBranch)
       : parenthesize('if', condition, thenBranch),
-  While: ({ condition, body }) => parenthesize('while', condition, body)
+  While: ({ condition, body }) => parenthesize('while', condition, body),
+  Break: ({ label }) => parenthesize('break', label?.lexeme),
+  Continue: ({ label }) => parenthesize('continue', label?.lexeme),
+  Label: ({ stmt, label }) => parenthesize('label', label, stmt),
+  ContinuePoint: ({ stmt }) => print(stmt)
 })
 
-function parenthesize(name: string, ...exprs: (Expression | Statement)[]): string {
-  return `(${name}${exprs.map(e => ` ${print(e)}`).join('')})`;
+function parenthesize(name: string, ...exprs: (Expression | Statement | string | undefined | null)[]): string {
+  return `(${name}${exprs.map(e => !e ? '' : ` ${typeof e === 'string' ? e : print(e)}`).join('')})`;
 }
 
 export default print

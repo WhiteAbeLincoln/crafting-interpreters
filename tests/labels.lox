@@ -1,0 +1,30 @@
+:outer_block {
+  print("enter outer");
+  :inner_block {
+    print("enter inner");
+    break outer_block; // breaks out of both inner_block and outer_block
+  }
+  print("SKIPPED: exit inner"); // skipped
+}
+print("exit outer");
+
+:while_block while (true) {
+  print("enter while");
+  break;
+}
+print("exit while");
+
+:for_block for (;;) {
+  print("enter for");
+  break;
+}
+print("exit for");
+
+for (var i = 1; i < 5; i = i + 1) {
+  if (i == 3) {
+    continue;
+  }
+  print i;
+}
+
+// break; // Error at 'break': Illegal break statement.

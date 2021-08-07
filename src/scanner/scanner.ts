@@ -1,6 +1,7 @@
-import type { DiscriminateUnion } from '../util/types'
-import type { GetLit, GetTok, LitTokenTypes, RegTokenTypes, Token, TokenType } from './token-type'
+import type { DiscriminateUnion, Matches } from '../util/types'
+import type { GetLit, GetTok, Keywords, LitTokenTypes, RegTokenTypes, Token, TokenType } from './token-type'
 import { error } from '../errors/errors'
+import { invertRecord, static_assert } from '../util/util'
 
 export function token<T extends LitTokenTypes>(
   type: T,
@@ -31,25 +32,31 @@ export function token<T extends TokenType>(
   return { type, lexeme, line, literal } as DiscriminateUnion<Token, 'type', T>
 }
 
+const keywordMap = {
+  'AND': 'and',
+  'CLASS': 'class',
+  'ELSE': 'else',
+  'FALSE': 'false',
+  'FOR': 'for',
+  'FUN': 'fun',
+  'IF': 'if',
+  'NIL': 'nil',
+  'OR': 'or',
+  'PRINT': 'print',
+  'RETURN': 'return',
+  'SUPER': 'super',
+  'THIS': 'this',
+  'TRUE': 'true',
+  'VAR': 'var',
+  'WHILE': 'while',
+  'BREAK': 'break',
+  'CONTINUE': 'continue',
+} as const
+
+static_assert<Matches<typeof keywordMap, Record<Keywords, string>>>();
+
 export class Scanner {
-  private keywords: Readonly<Record<string, TokenType>> = {
-    "and": 'AND',
-    "class":  'CLASS',
-    "else":   'ELSE',
-    "false":  'FALSE',
-    "for":    'FOR',
-    "fun":    'FUN',
-    "if":     'IF',
-    "nil":    'NIL',
-    "or":     'OR',
-    "print":  'PRINT',
-    "return": 'RETURN',
-    "super":  'SUPER',
-    "this":   'THIS',
-    "true":   'TRUE',
-    "var":    'VAR',
-    "while":  'WHILE',
-  }
+  private keywords: Readonly<Record<string, Keywords>> = invertRecord(keywordMap);
   private readonly tokens: Token[] = [];
   private start = 0
   private current = 0
@@ -78,6 +85,7 @@ export class Scanner {
       case '-': this.addToken('MINUS'); break
       case '+': this.addToken('PLUS'); break
       case ';': this.addToken('SEMICOLON'); break
+      case ':': this.addToken('COLON'); break
       case '*': this.addToken('STAR'); break
       case '!':
         this.addToken(this.match('=') ? 'BANG_EQUAL' : 'BANG')

@@ -8,6 +8,9 @@ import { runtimeError, RuntimeError } from '../errors/errors'
 import { Environment } from '../environment/environment'
 import { stringify, isTruthy, isEqual } from './utils'
 
+class BreakException { constructor(readonly label?: string) {} }
+class ContinueException { constructor(readonly label?: string) {} }
+
 type ExprFn<Args extends ExpressionValue[], B extends ExpressionValue> = (...params: { [k in keyof Args]: Args[k] & B }) => ExpressionValue
 function checkOps<B extends ExpressionValue, Args extends ExpressionValue[]>(pred: Assertion<ExpressionValue, B>, fn: ExprFn<Args, B>) {
   return (...params: Args): ExpressionValue => {
@@ -117,7 +120,43 @@ const execute = (env: Environment) =>
     },
     While: ({ condition, body }) => {
       while (isTruthy(evaluate(env)(condition))) {
-        execute(env)(body)
+        try {
+          execute(env)(body)
+        } catch (e) {
+          if (e instanceof BreakException && !e.label) {
+            break
+          } else {
+            throw e
+          }
+        }
+      }
+    },
+    Break: ({ label }) => {
+      // exceptions are a convenient way to break execution accross function boundaries
+      // the nearest enclosing while loop will catch this exception
+      throw new BreakException(label?.lexeme)
+    },
+    Continue: ({ label }) => { throw new ContinueException(label?.lexeme) },
+    Label: ({ label, stmt }) => {
+      try {
+        execute(env)(stmt)
+      } catch (e) {
+        if (e instanceof BreakException && e.label === label) {
+          return
+        }
+
+        throw e
+      }
+    },
+    ContinuePoint: ({ label, stmt }) => {
+      try {
+        execute(env)(stmt)
+      } catch (e) {
+        if (e instanceof ContinueException && (!e.label || e.label == label)) {
+          return
+        }
+
+        throw e
       }
     }
   })

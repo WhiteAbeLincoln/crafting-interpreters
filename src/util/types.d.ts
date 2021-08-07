@@ -1,6 +1,7 @@
 export type Matches<A, B> = [A] extends [B] ? '1' : '0'
 export type And<A, B> = A extends '1' ? (B extends '1' ? '1' : '0') : '0'
 export type Equal<A, B> = And<Matches<A, B>, Matches<B, A>>
+export type Not<T extends '1' | '0'> = T extends '1' ? '0' : '1'
 
 export type Assert<T, V> = T extends V ? T : never
 export type Fn<Args extends any[], R> = (...args: Args) => R
