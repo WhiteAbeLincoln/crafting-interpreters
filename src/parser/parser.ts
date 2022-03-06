@@ -44,6 +44,7 @@ export class Parser {
 
   private declaration(): Statement | null {
     try {
+      if (this.match('FUN')) return this.function('function')
       if (this.match('VAR')) return this.varDeclaration()
 
       return this.statement()
@@ -55,6 +56,27 @@ export class Parser {
         throw err
       }
     }
+  }
+
+  private function(kind: 'function' | 'method') {
+    const name = this.consume('IDENTIFIER', 'Expected ' + kind + ' name.')
+    this.consume('LEFT_PAREN', `Expected '(' after ${kind} name.`)
+    const params: TokenBase<'IDENTIFIER'>[] = []
+    if (!this.check('RIGHT_PAREN')) {
+      do {
+        if (params.length >= 255) {
+          this.error(this.peek(), "Can't have more than 255 parameters.")
+        }
+
+        params.push(this.consume('IDENTIFIER', "Expected parameter name."))
+      } while (this.match('COMMA'))
+    }
+    this.consume('RIGHT_PAREN', "Expected ')' after parameters.")
+
+    this.consume('LEFT_BRACE', `Expected '{' before ${kind} body.`)
+    const body = this.block()
+
+    return Stmt.Function({ name, params, body })
   }
 
   private tryExpr(): Statement | null {
@@ -92,6 +114,16 @@ export class Parser {
     return null
   }
 
+  private returnStatement(keyword: TokenBase<'RETURN'>) {
+    let value: Expression = Expr.Literal({ value: null })
+    if (!this.check('SEMICOLON')) {
+      value = this.expression()
+    }
+
+    this.consume('SEMICOLON', "Expected ';' after return.")
+    return Stmt.Return({ keyword, value })
+  }
+
   private label(): Statement {
     const label = this.consume('IDENTIFIER', "Expect label after ':'.")
 
@@ -115,6 +147,10 @@ export class Parser {
     if (blockStmt) return blockStmt
 
     if (this.match('PRINT')) return this.printStatement()
+    const retTok = this.match('RETURN')
+    if (retTok) {
+      return this.returnStatement(retTok)
+    }
     const breaktok = this.match('BREAK')
     if (breaktok) {
       if (!this.canBreak()) {
@@ -340,7 +376,36 @@ export class Parser {
       return Expr.Unary({ op, expr })
     }
 
-    return this.primary()
+    return this.call()
+  }
+
+  private call(): Expression {
+    let expr = this.primary()
+
+    while (true) {
+      if (this.match('LEFT_PAREN')) {
+        expr = this.finishCall(expr)
+      } else {
+        break
+      }
+    }
+
+    return expr
+  }
+
+  private finishCall(callee: Expression) {
+    const args: Expression[] = []
+    if (!this.check('RIGHT_PAREN')) {
+      do {
+        if (args.length >= 255) {
+          this.error(this.peek(), "Can't have more than 255 arguments.")
+        }
+        args.push(this.expression())
+      } while (this.match('COMMA'))
+    }
+    const paren = this.consume('RIGHT_PAREN', "Expected ')' after argument list.")
+
+    return Expr.Call({ callee, args, callToken: paren })
   }
 
   private primary(): Expression {

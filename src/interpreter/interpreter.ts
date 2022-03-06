@@ -1,6 +1,6 @@
-import type { Expression, Statement, ExpressionValue } from '../ast/ast'
+import { Expression, Statement, ExpressionValue, isCallable, Callable, makeCallable } from '../ast/ast'
 import type { Token } from '../scanner/token-type'
-import type { Assertion } from '../util/types'
+import type { Assertion, DiscriminateUnion } from '../util/types'
 import { Expr, Stmt } from '../ast/ast'
 import { ge, gt, le, lt, sub, neg, div, mul } from '../util/util'
 import Logger from '../logger/logger'
@@ -10,6 +10,7 @@ import { stringify, isTruthy, isEqual } from './utils'
 
 class BreakException { constructor(readonly label?: string) {} }
 class ContinueException { constructor(readonly label?: string) {} }
+class ReturnException { constructor(readonly value: ExpressionValue) {} }
 
 type ExprFn<Args extends ExpressionValue[], B extends ExpressionValue> = (...params: { [k in keyof Args]: Args[k] & B }) => ExpressionValue
 function checkOps<B extends ExpressionValue, Args extends ExpressionValue[]>(pred: Assertion<ExpressionValue, B>, fn: ExprFn<Args, B>) {
@@ -25,10 +26,16 @@ const assertNumber = (op: Token) => (a: ExpressionValue): asserts a is number =>
   }
 }
 
+function assertCallable(op: Token, a: ExpressionValue): asserts a is Callable {
+  if (!isCallable(a)) {
+    throw new RuntimeError(op, 'Can only call functions or classes.')
+  }
+}
+
 const checkNumOps = <Args extends ExpressionValue[]>(t: Token, fn: ExprFn<Args, number>) => checkOps(assertNumber(t), fn)
 
-export const evaluate: (env: Environment) => (e: Expression) => ExpressionValue = env => Expr.match({
-  'Literal': ({ value }) => value,
+export const evaluate: (env: Environment) => (e: Expression) => ExpressionValue = env => Expr.match<ExpressionValue>({
+  'Literal': ({ value }) => value as ExpressionValue,
   'Grouping': ({ expr }) => evaluate(env)(expr),
   'Unary': expr => {
     const right = evaluate(env)(expr.expr)
@@ -82,8 +89,26 @@ export const evaluate: (env: Environment) => (e: Expression) => ExpressionValue 
     }
 
     return evaluate(env)(expr.right)
+  },
+  'Call': ({ callee: unevalCallee, args: unevalArgs, callToken }) => {
+    const callee = evaluate(env)(unevalCallee)
+
+    assertCallable(callToken, callee)
+
+    const args: ExpressionValue[] = unevalArgs.map(evaluate(env))
+
+    if (args.length !== callee.arity) {
+      throw new RuntimeError(callToken, `Expected ${callee.arity} arguments but got ${args.length}.`)
+    }
+
+    return callee.call(env, args)
   }
 })
+
+const globalEnvironment = new Environment()
+globalEnvironment.define('clock', makeCallable(function clock(_env) {
+  return performance.now()
+}, 0))
 
 const execute = (env: Environment) =>
   Stmt.match({
@@ -158,10 +183,43 @@ const execute = (env: Environment) =>
 
         throw e
       }
+    },
+    Function: declaration => {
+      const callable = makeCallableFunction(env, declaration)
+      env.define(declaration.name.lexeme, callable)
+    },
+    Return: v => {
+      throw new ReturnException(evaluate(env)(v.value))
     }
   })
 
-export function interpret(statements: Statement[], env = new Environment()) {
+function makeCallableFunction(closure: Environment, { params, name, body }: Omit<DiscriminateUnion<Statement, 'kind', 'Function'>, 'kind'>): Callable {
+  return {
+    arity: params.length,
+    call(_env, args) {
+      const env = new Environment(closure)
+      for (let i = 0; i < params.length; ++i) {
+        const param = params[i]!
+        env.define(param.lexeme, args[i])
+      }
+
+      try {
+        execute(env)({ kind: 'Block', statements: body })
+      }
+      catch (e) {
+        if (e instanceof ReturnException) {
+          return e.value
+        }
+        throw e
+      }
+
+      return null
+    },
+    toString() { return `<fn ${name.lexeme}>` }
+  }
+}
+
+export function interpret(statements: Statement[], env = new Environment(globalEnvironment)) {
   try {
     const executer = execute(env)
     for (const stmt of statements) {

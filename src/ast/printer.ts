@@ -12,7 +12,7 @@ export const print: (v: Expression | Statement) => string = matcher<
       ? 'nil'
       : typeof value === 'string'
       ? `"${value}"`
-      : value.toString(),
+      : (value as any).toString(),
   Unary: ({ op, expr }) => parenthesize(op.lexeme, expr),
   Variable: ({ name }) => name.lexeme,
   Assign: ({ name, value }) =>
@@ -32,7 +32,15 @@ export const print: (v: Expression | Statement) => string = matcher<
   Break: ({ label }) => parenthesize('break', label?.lexeme),
   Continue: ({ label }) => parenthesize('continue', label?.lexeme),
   Label: ({ stmt, label }) => parenthesize('label', label, stmt),
-  ContinuePoint: ({ stmt }) => print(stmt)
+  ContinuePoint: ({ stmt }) => print(stmt),
+  Function: ({ name, body, params }) => parenthesize(
+    'function',
+    name.lexeme,
+    parenthesize('parameters', ...params.map(p => p.lexeme)),
+    print({ kind: 'Block', statements: body })
+  ),
+  Call: v => parenthesize('call', print(v.callee), parenthesize('arguments', ...v.args.map(print))),
+  Return: v => parenthesize('return', print(v.value)),
 })
 
 function parenthesize(name: string, ...exprs: (Expression | Statement | string | undefined | null)[]): string {

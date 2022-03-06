@@ -80,6 +80,7 @@ function runPrompt() {
         Err.reset()
       }
     } catch (e) {
+      if (!(e instanceof Error)) return cb(new Error('unknown error ' + e), undefined)
       if (isRecoverableError(e)) {
         return cb(new repl.Recoverable(e), undefined)
       } else {
@@ -153,7 +154,7 @@ async function main(argv: string[]): Promise<number> {
       await runPrompt()
     }
   } catch (e) {
-    Logger.stderr(e)
+    Logger.stderr(String(e))
     return 1
   }
 
